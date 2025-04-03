@@ -14,19 +14,20 @@ module "vpc" {
   project_name         = var.project_name
 }
 
-# Uncomment these modules as you implement them
-# module "rds" {
-#   source = "./modules/rds"
-#
-#   vpc_id                 = module.vpc.vpc_id
-#   db_subnet_group_name   = module.vpc.db_subnet_group_name
-#   db_security_group_id   = module.vpc.db_security_group_id
-#   db_name                = var.db_name
-#   db_username            = var.db_username
-#   db_password            = var.db_password
-#   db_instance_class      = var.db_instance_class
-# }
-#
+module "rds" {
+  source = "./modules/rds"
+
+  project_name          = var.project_name
+  vpc_id                 = module.vpc.vpc_id
+  db_subnet_group_name   = module.vpc.db_subnet_group_name
+  db_security_group_id   = module.vpc.db_security_group_id
+  db_name                = var.db_name
+  db_username            = var.db_username
+  db_password            = var.db_password
+  db_instance_class      = var.db_instance_class
+}
+
+
 # module "elasticsearch" {
 #   source = "./modules/elasticsearch"
 #
