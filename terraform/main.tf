@@ -37,12 +37,14 @@ module "elasticsearch" {
   instance_type         = var.elasticsearch_instance_type
 }
 
-# module "ec2" {
-#   source = "./modules/ec2"
-#
-#   vpc_id              = module.vpc.vpc_id
-#   public_subnet_id    = module.vpc.public_subnet_ids[0]
-#   app_security_group_id = module.vpc.app_security_group_id
-#   key_name            = var.key_name
-#   instance_type       = var.ec2_instance_type
-# }
+module "ec2" {
+  source = "./modules/ec2"
+
+  vpc_id                = module.vpc.vpc_id
+  public_subnet_id      = module.vpc.public_subnet_ids[0]
+  app_security_group_id = module.vpc.app_security_group_id
+  key_name              = var.key_name
+  instance_type         = var.ec2_instance_type
+  internet_gateway_id   = module.vpc.internet_gateway_id
+  project_name          = var.project_name
+}
