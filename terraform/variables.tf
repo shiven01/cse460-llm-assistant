@@ -36,12 +36,6 @@ variable "availability_zones" {
   default     = ["us-east-1a", "us-east-1b"]
 }
 
-variable "your_ip" {
-  description = "Your IP address for SSH access (CIDR notation)"
-  type        = string
-  default     = "0.0.0.0/0"  # Replace with your IP in terraform.tfvars
-}
-
 # Database variables
 variable "db_name" {
   description = "Name of the database"

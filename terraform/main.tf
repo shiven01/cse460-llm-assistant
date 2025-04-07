@@ -27,17 +27,16 @@ module "rds" {
   db_instance_class      = var.db_instance_class
 }
 
+module "elasticsearch" {
+  source = "./modules/elasticsearch"
 
-# module "elasticsearch" {
-#   source = "./modules/elasticsearch"
-#
-#   vpc_id                = module.vpc.vpc_id
-#   private_subnet_ids    = module.vpc.private_subnet_ids
-#   elasticsearch_sg_id   = module.vpc.elasticsearch_sg_id
-#   domain_name           = var.elasticsearch_domain_name
-#   instance_type         = var.elasticsearch_instance_type
-# }
-#
+  vpc_id                = module.vpc.vpc_id
+  private_subnet_ids    = module.vpc.private_subnet_ids
+  elasticsearch_sg_id   = module.vpc.elasticsearch_sg_id
+  domain_name           = var.elasticsearch_domain_name
+  instance_type         = var.elasticsearch_instance_type
+}
+
 # module "ec2" {
 #   source = "./modules/ec2"
 #
