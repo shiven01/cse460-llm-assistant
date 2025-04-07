@@ -41,5 +41,3 @@ build/
 
 # Application properties files
 **/application.properties
-**/application-dev.properties
-**/application-prod.properties
