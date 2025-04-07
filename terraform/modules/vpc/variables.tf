@@ -30,3 +30,9 @@ variable "your_ip" {
   type        = string
   default     = "0.0.0.0/0"  # Replace with your IP in terraform.tfvars
 }
+
+variable "allowed_ssh_ips" {
+  description = "List of IP addresses allowed SSH access (CIDR notation)"
+  type        = list(string)
+  default     = []
+}

@@ -182,9 +182,9 @@ resource "aws_security_group_rule" "ssh_access" {
   from_port         = 22
   to_port           = 22
   protocol          = "tcp"
-  cidr_blocks       = ["104.222.31.139/32"]
+  cidr_blocks       = var.allowed_ssh_ips
   security_group_id = aws_security_group.app.id
-  description       = "SSH Access from Home"
+  description       = "SSH Access from allowed IPs"
 }
 
 # 3. Elasticsearch Security Group
