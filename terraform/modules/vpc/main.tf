@@ -158,11 +158,11 @@ resource "aws_security_group" "app" {
   }
 
   ingress {
-    description = "Spring Boot application port"
+    description = "Spring Boot application port (internal)"
     from_port   = 8080
     to_port     = 8080
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = [var.vpc_cidr_block]
   }
 
   egress {
