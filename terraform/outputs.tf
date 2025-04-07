@@ -15,19 +15,18 @@ output "private_subnet_ids" {
   value       = module.vpc.private_subnet_ids
 }
 
-# Uncomment as you implement modules
-# output "db_endpoint" {
-#   description = "The endpoint of the database"
-#   value       = module.rds.db_endpoint
-#   sensitive   = true
-# }
-#
-# output "elasticsearch_endpoint" {
-#   description = "The endpoint of the Elasticsearch domain"
-#   value       = module.elasticsearch.elasticsearch_endpoint
-# }
-#
-# output "ec2_public_ip" {
-#   description = "The public IP of the EC2 instance"
-#   value       = module.ec2.ec2_public_ip
-# }
+output "db_endpoint" {
+  description = "The endpoint of the database"
+  value       = module.rds.db_endpoint
+  sensitive   = true
+}
+
+output "elasticsearch_endpoint" {
+  description = "The endpoint of the Elasticsearch domain"
+  value       = module.elasticsearch.elasticsearch_endpoint
+}
+
+#output "ec2_public_ip" {
+#  description = "The public IP of the EC2 instance"
+#  value       = module.ec2.ec2_public_ip
+#}
