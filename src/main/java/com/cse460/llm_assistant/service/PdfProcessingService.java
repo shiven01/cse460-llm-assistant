@@ -1,32 +1,18 @@
 package com.cse460.llm_assistant.service;
-import com.cse460.llm_assistant.service.ImageExtractionService;
 
 import com.cse460.llm_assistant.model.Document;
 import com.cse460.llm_assistant.model.DocumentContent;
-import com.cse460.llm_assistant.model.DocumentImage;
 import com.cse460.llm_assistant.repository.DocumentContentRepository;
-import com.cse460.llm_assistant.repository.DocumentImageRepository;
 import com.cse460.llm_assistant.repository.DocumentRepository;
-import com.cse460.llm_assistant.util.DiagramDetector;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.pdfbox.contentstream.PDFStreamEngine;
-import org.apache.pdfbox.contentstream.operator.Operator;
-import org.apache.pdfbox.cos.COSBase;
-import org.apache.pdfbox.cos.COSName;
+import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
-import org.apache.pdfbox.pdmodel.PDPage;
-import org.apache.pdfbox.pdmodel.graphics.PDXObject;
-import org.apache.pdfbox.pdmodel.graphics.form.PDFormXObject;
-import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import javax.imageio.ImageIO;
-import java.awt.image.BufferedImage;
 import java.io.BufferedReader;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -45,7 +31,6 @@ public class PdfProcessingService {
 
     private final DocumentRepository documentRepository;
     private final DocumentContentRepository contentRepository;
-    private final DocumentImageRepository imageRepository;
     private final ImageExtractionService imageExtractionService;
 
     // Maximum content length per chunk
@@ -106,7 +91,8 @@ public class PdfProcessingService {
     }
 
     private void processPdfFile(Document document, MultipartFile file) throws IOException {
-        try (PDDocument pdDocument = PDDocument.load(file.getInputStream())) {
+        // Updated to use PDFBox 3.0.3 API
+        try (PDDocument pdDocument = Loader.loadPDF(file.getBytes())) {
             document.setPageCount(pdDocument.getNumberOfPages());
 
             // Extract text page by page
@@ -119,121 +105,14 @@ public class PdfProcessingService {
                 // Store text in chunks
                 storeTextChunks(document, pageNum, pageText);
             }
-
-            // Extract images after text processing is complete
-            try {
-                imageExtractionService.extractAndStoreImages(document, pdDocument);
-            } catch (Exception e) {
-                // Log the error but continue with document processing
-                log.error("Error extracting images from document: {}", e.getMessage());
-            }
-        }
-    }
-
-    private void extractAndStoreImages(Document document, PDDocument pdDocument, int pageNum) throws IOException {
-        PDPage page = pdDocument.getPage(pageNum - 1); // PDFBox uses 0-based indexing
-        ImageExtractor imageExtractor = new ImageExtractor();
-        imageExtractor.processPage(page);
-
-        List<ExtractedImage> extractedImages = imageExtractor.getImages();
-        log.info("Extracted {} images from page {}", extractedImages.size(), pageNum);
-
-        for (int i = 0; i < extractedImages.size(); i++) {
-            ExtractedImage extractedImage = extractedImages.get(i);
-            BufferedImage bufferedImage = extractedImage.getImage();
-
-            // Check if this image is likely a diagram
-            boolean isDiagram = DiagramDetector.isDiagram(bufferedImage);
-
-            // Convert BufferedImage to byte array
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            ImageIO.write(bufferedImage, "PNG", baos);
-            byte[] imageData = baos.toByteArray();
-
-            // Create and save image entity
-            DocumentImage documentImage = DocumentImage.builder()
-                    .document(document)
-                    .pageNumber(pageNum)
-                    .x(extractedImage.getX())
-                    .y(extractedImage.getY())
-                    .width((float) bufferedImage.getWidth())
-                    .height((float) bufferedImage.getHeight())
-                    .imageData(imageData)
-                    .format("PNG")
-                    .isDiagram(isDiagram)
-                    .description(isDiagram ?
-                            "Diagram/Chart " + (i + 1) + " on page " + pageNum :
-                            "Image " + (i + 1) + " on page " + pageNum)
-                    .build();
-
-            imageRepository.save(documentImage);
-            log.info("Saved {} {} for page {}", isDiagram ? "diagram" : "image", i, pageNum);
-        }
-    }
-
-    // Inner class to handle image extraction
-    private static class ImageExtractor extends PDFStreamEngine {
-        private final List<ExtractedImage> images = new ArrayList<>();
-        private float x = 0;
-        private float y = 0;
-
-        public List<ExtractedImage> getImages() {
-            return images;
         }
 
-        @Override
-        protected void processOperator(Operator operator, List<COSBase> operands) throws IOException {
-            String operation = operator.getName();
-
-            if ("Do".equals(operation)) {
-                COSName objectName = (COSName) operands.get(0);
-                PDXObject xobject = getResources().getXObject(objectName);
-
-                if (xobject instanceof PDImageXObject) {
-                    PDImageXObject image = (PDImageXObject) xobject;
-                    BufferedImage bufferedImage = image.getImage();
-                    images.add(new ExtractedImage(bufferedImage, x, y));
-                } else if (xobject instanceof PDFormXObject) {
-                    PDFormXObject form = (PDFormXObject) xobject;
-                    showForm(form);
-                }
-            } else if ("cm".equals(operation)) {
-                // cm operator defines a transformation matrix - we could use it to get precise image positioning
-                // For simplicity, we're just capturing the current coordinates
-                if (operands.size() >= 6) {
-                    x = ((COSBase) operands.get(4)).toString().contains(".") ?
-                            Float.parseFloat(((COSBase) operands.get(4)).toString()) : 0;
-                    y = ((COSBase) operands.get(5)).toString().contains(".") ?
-                            Float.parseFloat(((COSBase) operands.get(5)).toString()) : 0;
-                }
-            }
-
-            super.processOperator(operator, operands);
-        }
-    }
-
-    // Helper class to store extracted image with position
-    private static class ExtractedImage {
-        private final BufferedImage image;
-        private final float x;
-        private final float y;
-
-        public ExtractedImage(BufferedImage image, float x, float y) {
-            this.image = image;
-            this.x = x;
-            this.y = y;
-        }
-
-        public BufferedImage getImage() {
-            return image;
-        }
-
-        public float getX() {
-            return x;
-        }
-
-        public float getY() {
-            return y;
+        // Extract images - we use a separate method to handle this
+        try {
+            log.info("Starting image extraction");
+            imageExtractionService.extractImages(document, file);
+        } catch (Exception e) {
+            log.error("Error during image extraction: {}", e.getMessage(), e);
         }
     }
 
