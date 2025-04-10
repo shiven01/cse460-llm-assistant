@@ -1,5 +1,5 @@
-// src/main/java/com/cse460/llm_assistant/service/PdfProcessingService.java
 package com.cse460.llm_assistant.service;
+import com.cse460.llm_assistant.service.ImageExtractionService;
 
 import com.cse460.llm_assistant.model.Document;
 import com.cse460.llm_assistant.model.DocumentContent;
@@ -46,6 +46,7 @@ public class PdfProcessingService {
     private final DocumentRepository documentRepository;
     private final DocumentContentRepository contentRepository;
     private final DocumentImageRepository imageRepository;
+    private final ImageExtractionService imageExtractionService;
 
     // Maximum content length per chunk
     private static final int MAX_CHUNK_SIZE = 1000;
@@ -117,9 +118,14 @@ public class PdfProcessingService {
 
                 // Store text in chunks
                 storeTextChunks(document, pageNum, pageText);
+            }
 
-                // Extract images from this page
-                extractAndStoreImages(document, pdDocument, pageNum);
+            // Extract images after text processing is complete
+            try {
+                imageExtractionService.extractAndStoreImages(document, pdDocument);
+            } catch (Exception e) {
+                // Log the error but continue with document processing
+                log.error("Error extracting images from document: {}", e.getMessage());
             }
         }
     }
