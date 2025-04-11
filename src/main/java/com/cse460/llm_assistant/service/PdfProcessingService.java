@@ -31,14 +31,19 @@ public class PdfProcessingService {
 
     private final DocumentRepository documentRepository;
     private final DocumentContentRepository contentRepository;
-    private final ImageExtractionService imageExtractionService;
 
     // Maximum content length per chunk
     private static final int MAX_CHUNK_SIZE = 1000;
 
     public Document processAndStorePdf(MultipartFile file, String title, String description) throws IOException {
         // Log the start of processing
-        log.info("Starting to process file: {}", file.getOriginalFilename());
+        log.info("Starting to process file: {}, size: {}, content type: {}",
+                file.getOriginalFilename(), file.getSize(), file.getContentType());
+
+        if (file.isEmpty()) {
+            log.error("Received empty file");
+            throw new IOException("File is empty");
+        }
 
         // Compute hash to check for duplicates
         String contentHash = computeHash(file);
@@ -69,7 +74,7 @@ public class PdfProcessingService {
 
         try {
             // Process based on content type
-            if (file.getContentType() != null && file.getContentType().equals("application/pdf")) {
+            if (file.getContentType() != null && file.getContentType().toLowerCase().contains("pdf")) {
                 log.info("Processing PDF file");
                 processPdfFile(document, file);
             } else {
@@ -91,32 +96,36 @@ public class PdfProcessingService {
     }
 
     private void processPdfFile(Document document, MultipartFile file) throws IOException {
-        // Updated to use PDFBox 3.0.3 API
-        try (PDDocument pdDocument = Loader.loadPDF(file.getBytes())) {
-            document.setPageCount(pdDocument.getNumberOfPages());
+        log.debug("Starting PDF processing using PDFBox 3.0.4");
 
-            // Extract text page by page
+        try (PDDocument pdDocument = Loader.loadPDF(file.getBytes())) {
+            int pageCount = pdDocument.getNumberOfPages();
+            document.setPageCount(pageCount);
+            log.info("PDF loaded successfully with {} pages", pageCount);
+
+            // Extract text from the entire document at once
             PDFTextStripper stripper = new PDFTextStripper();
-            for (int pageNum = 1; pageNum <= pdDocument.getNumberOfPages(); pageNum++) {
+            String allText = stripper.getText(pdDocument);
+            log.info("Extracted {} characters of text from the entire document", allText.length());
+
+            // Also extract text page by page for better organization
+            for (int pageNum = 1; pageNum <= pageCount; pageNum++) {
                 stripper.setStartPage(pageNum);
                 stripper.setEndPage(pageNum);
                 String pageText = stripper.getText(pdDocument);
+                log.debug("Page {}: extracted {} characters", pageNum, pageText.length());
 
                 // Store text in chunks
                 storeTextChunks(document, pageNum, pageText);
             }
-        }
-
-        // Extract images - we use a separate method to handle this
-        try {
-            log.info("Starting image extraction");
-            imageExtractionService.extractImages(document, file);
         } catch (Exception e) {
-            log.error("Error during image extraction: {}", e.getMessage(), e);
+            log.error("Error processing PDF: {}", e.getMessage(), e);
+            throw e;
         }
     }
 
     private void processTextFile(Document document, MultipartFile file) throws IOException {
+        log.debug("Starting text file processing");
         String text = readFromInputStream(file.getInputStream());
         log.info("Read {} characters from text file", text.length());
 
@@ -145,7 +154,7 @@ public class PdfProcessingService {
                     .build();
 
             contentRepository.save(content);
-            log.info("Saved chunk {} for page {}", i, pageNum);
+            log.debug("Saved chunk {} for page {}", i, pageNum);
         }
     }
 
