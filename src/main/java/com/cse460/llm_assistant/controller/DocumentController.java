@@ -51,12 +51,6 @@ public class DocumentController {
         }
     }
 
-    @GetMapping("/{id}")
-    public ResponseEntity<?> getDocument(@PathVariable Long id) {
-        log.info("Retrieving document with ID: {}", id);
-        return ResponseEntity.ok().build(); // Placeholder - implement actual logic
-    }
-
     @GetMapping("/{id}/text")
     public ResponseEntity<?> getDocumentText(@PathVariable Long id) {
         log.info("Retrieving text for document with ID: {}", id);
