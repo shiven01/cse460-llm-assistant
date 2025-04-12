@@ -13,14 +13,16 @@
 	<version>0.0.1-SNAPSHOT</version>
 	<name>llm-assistant</name>
 	<description>CSE460 LLM Assistant for PDF documents</description>
+
 	<properties>
 		<java.version>17</java.version>
 		<langchain4j.version>0.27.1</langchain4j.version>
-		<elasticsearch.version>8.12.2</elasticsearch.version>
-		<jjwt.version>0.11.5</jjwt.version>
+		<elasticsearch.version>8.12.1</elasticsearch.version>
+		<jwt.version>0.11.5</jwt.version>
 	</properties>
+
 	<dependencies>
-		<!-- Spring Boot Starters -->
+		<!-- Spring Boot Core Dependencies -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-data-jpa</artifactId>
@@ -51,11 +53,23 @@
 			<scope>runtime</scope>
 		</dependency>
 
-		<!-- Utilities -->
+		<!-- Lombok -->
 		<dependency>
 			<groupId>org.projectlombok</groupId>
 			<artifactId>lombok</artifactId>
 			<optional>true</optional>
+		</dependency>
+
+		<!-- Testing -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.security</groupId>
+			<artifactId>spring-security-test</artifactId>
+			<scope>test</scope>
 		</dependency>
 
 		<!-- PDF Processing -->
@@ -76,34 +90,15 @@
 			<artifactId>jackson-databind</artifactId>
 		</dependency>
 
-		<!-- JWT for Authentication -->
+		<!-- Elasticsearch - Modern client -->
 		<dependency>
-			<groupId>io.jsonwebtoken</groupId>
-			<artifactId>jjwt-api</artifactId>
-			<version>${jjwt.version}</version>
-		</dependency>
-		<dependency>
-			<groupId>io.jsonwebtoken</groupId>
-			<artifactId>jjwt-impl</artifactId>
-			<version>${jjwt.version}</version>
-			<scope>runtime</scope>
-		</dependency>
-		<dependency>
-			<groupId>io.jsonwebtoken</groupId>
-			<artifactId>jjwt-jackson</artifactId>
-			<version>${jjwt.version}</version>
-			<scope>runtime</scope>
-		</dependency>
-
-		<!-- reCAPTCHA -->
-		<dependency>
-			<groupId>com.google.cloud</groupId>
-			<artifactId>spring-cloud-gcp-starter-core</artifactId>
-			<version>4.8.4</version>
+			<groupId>co.elastic.clients</groupId>
+			<artifactId>elasticsearch-java</artifactId>
+			<version>${elasticsearch.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-webflux</artifactId>
+			<artifactId>spring-boot-starter-data-elasticsearch</artifactId>
 		</dependency>
 
 		<!-- LangChain4j -->
@@ -117,38 +112,43 @@
 			<artifactId>langchain4j-embeddings-all-minilm-l6-v2</artifactId>
 			<version>${langchain4j.version}</version>
 		</dependency>
+		<!-- LangChain4j Easy RAG -->
 		<dependency>
 			<groupId>dev.langchain4j</groupId>
 			<artifactId>langchain4j-easy-rag</artifactId>
-			<version>${langchain4j.version}</version>
+			<version>1.0.0-alpha1</version>
 		</dependency>
+		<!-- LangChain4j OpenAI Integration for using ChatGPT -->
 		<dependency>
 			<groupId>dev.langchain4j</groupId>
-			<artifactId>langchain4j-elasticsearch</artifactId>
+			<artifactId>langchain4j-open-ai</artifactId>
 			<version>${langchain4j.version}</version>
 		</dependency>
 
-		<!-- Elasticsearch Client -->
+		<!-- JWT for Auth -->
 		<dependency>
-			<groupId>co.elastic.clients</groupId>
-			<artifactId>elasticsearch-java</artifactId>
-			<version>${elasticsearch.version}</version>
+			<groupId>io.jsonwebtoken</groupId>
+			<artifactId>jjwt-api</artifactId>
+			<version>${jwt.version}</version>
 		</dependency>
 		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-data-elasticsearch</artifactId>
+			<groupId>io.jsonwebtoken</groupId>
+			<artifactId>jjwt-impl</artifactId>
+			<version>${jwt.version}</version>
+			<scope>runtime</scope>
+		</dependency>
+		<dependency>
+			<groupId>io.jsonwebtoken</groupId>
+			<artifactId>jjwt-jackson</artifactId>
+			<version>${jwt.version}</version>
+			<scope>runtime</scope>
 		</dependency>
 
-		<!-- Testing -->
+		<!-- reCAPTCHA validation -->
 		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-test</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.security</groupId>
-			<artifactId>spring-security-test</artifactId>
-			<scope>test</scope>
+			<groupId>com.google.guava</groupId>
+			<artifactId>guava</artifactId>
+			<version>32.1.3-jre</version>
 		</dependency>
 	</dependencies>
 
