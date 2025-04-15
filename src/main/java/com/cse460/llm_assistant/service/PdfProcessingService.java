@@ -23,6 +23,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @Slf4j
@@ -31,6 +32,7 @@ public class PdfProcessingService {
 
     private final DocumentRepository documentRepository;
     private final DocumentContentRepository contentRepository;
+    private final EmbeddingService embeddingService;
 
     // Maximum content length per chunk
     private static final int MAX_CHUNK_SIZE = 1000;
@@ -85,6 +87,12 @@ public class PdfProcessingService {
             document.setStatus("PROCESSED");
             document.setProcessedAt(LocalDateTime.now());
             log.info("Document processed successfully");
+
+            // Save document before generating embeddings
+            document = documentRepository.save(document);
+
+            // Generate embeddings
+            embeddingService.processDocumentEmbeddings(document);
 
         } catch (Exception e) {
             log.error("Error processing file", e);
