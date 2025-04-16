@@ -23,7 +23,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @Slf4j
@@ -41,11 +40,6 @@ public class PdfProcessingService {
         // Log the start of processing
         log.info("Starting to process file: {}, size: {}, content type: {}",
                 file.getOriginalFilename(), file.getSize(), file.getContentType());
-
-        if (file.isEmpty()) {
-            log.error("Received empty file");
-            throw new IOException("File is empty");
-        }
 
         // Compute hash to check for duplicates
         String contentHash = computeHash(file);
@@ -79,7 +73,9 @@ public class PdfProcessingService {
             if (file.getContentType() != null && file.getContentType().toLowerCase().contains("pdf")) {
                 log.info("Processing PDF file");
                 processPdfFile(document, file);
-            } else {
+            }
+            // For testing purposes
+            else {
                 log.info("Processing text file");
                 processTextFile(document, file);
             }
@@ -150,7 +146,7 @@ public class PdfProcessingService {
 
     private void storeTextChunks(Document document, int pageNum, String pageText) {
         // Simple chunking by size
-        List<String> chunks = splitTextIntoChunks(pageText, MAX_CHUNK_SIZE);
+        List<String> chunks = splitTextIntoChunks(pageText);
         log.info("Split text into {} chunks for page {}", chunks.size(), pageNum);
 
         for (int i = 0; i < chunks.size(); i++) {
@@ -166,12 +162,12 @@ public class PdfProcessingService {
         }
     }
 
-    private List<String> splitTextIntoChunks(String text, int maxChunkSize) {
+    private List<String> splitTextIntoChunks(String text) {
         List<String> chunks = new ArrayList<>();
 
         // Simple split by character count
-        for (int i = 0; i < text.length(); i += maxChunkSize) {
-            chunks.add(text.substring(i, Math.min(i + maxChunkSize, text.length())));
+        for (int i = 0; i < text.length(); i += PdfProcessingService.MAX_CHUNK_SIZE) {
+            chunks.add(text.substring(i, Math.min(i + PdfProcessingService.MAX_CHUNK_SIZE, text.length())));
         }
 
         return chunks;
