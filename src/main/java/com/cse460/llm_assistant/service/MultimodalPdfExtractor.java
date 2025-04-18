@@ -3,21 +3,15 @@ package com.cse460.llm_assistant.service;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.pdfbox.Loader;
-import org.apache.pdfbox.cos.COSName;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.rendering.ImageType;
 import org.apache.pdfbox.rendering.PDFRenderer;
-import org.apache.pdfbox.pdmodel.PDPage;
-import org.apache.pdfbox.pdmodel.PDResources;
-import org.apache.pdfbox.pdmodel.graphics.PDXObject;
-import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.springframework.stereotype.Component;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
-import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -50,8 +44,9 @@ public class MultimodalPdfExtractor {
     }
 
     /**
-     * Extracts images from a PDF file with page numbers
+     * Renders each page of a PDF as an image
      * Returns a map of page number to list of image byte arrays
+     * Each page will have exactly one image in the list (the rendered page)
      */
     public Map<Integer, List<byte[]>> extractImages(byte[] pdfData) throws IOException {
         Map<Integer, List<byte[]>> pageImagesMap = new HashMap<>();
@@ -59,37 +54,37 @@ public class MultimodalPdfExtractor {
         try (PDDocument document = Loader.loadPDF(pdfData)) {
             PDFRenderer renderer = new PDFRenderer(document);
 
+            // Disable subsampling for better rendering quality
+            renderer.setSubsamplingAllowed(false);
+
+            log.info("Processing PDF with {} pages", document.getNumberOfPages());
+
+            // Process each page in the document
             for (int i = 0; i < document.getNumberOfPages(); i++) {
                 int pageNum = i + 1;
                 List<byte[]> pageImages = new ArrayList<>();
 
-                // Try to extract embedded images first
-                PDPage page = document.getPage(i);
-                PDResources resources = page.getResources();
-                if (resources != null) {
-                    // Extract embedded images (existing code)
-                    for (COSName name : resources.getXObjectNames()) {
-                        PDXObject xObject = resources.getXObject(name);
-                        if (xObject instanceof PDImageXObject) {
-                            PDImageXObject image = (PDImageXObject)xObject;
-                            BufferedImage bufferedImage = image.getImage();
-                            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                            ImageIO.write(bufferedImage, "PNG", baos);
-                            pageImages.add(baos.toByteArray());
-                        }
-                    }
-                }
+                try {
+                    // Render the page at 300 DPI for good quality
+                    BufferedImage renderedPage = renderer.renderImageWithDPI(i, 300, ImageType.RGB);
 
-                // If no embedded images found, render the page
-                if (pageImages.isEmpty()) {
-                    BufferedImage renderedPage = renderer.renderImageWithDPI(i, 150, ImageType.RGB);
+                    // Log image dimensions for debugging
+                    log.debug("Rendered page {} with dimensions: {}x{}",
+                            pageNum, renderedPage.getWidth(), renderedPage.getHeight());
+
+                    // Convert the rendered image to PNG format
                     ByteArrayOutputStream baos = new ByteArrayOutputStream();
                     ImageIO.write(renderedPage, "PNG", baos);
-                    pageImages.add(baos.toByteArray());
-                }
 
-                if (!pageImages.isEmpty()) {
+                    // Add the image to the list for this page
+                    pageImages.add(baos.toByteArray());
+
+                    // Add the list to the map for this page number
                     pageImagesMap.put(pageNum, pageImages);
+
+                    log.info("Successfully rendered page {} as image", pageNum);
+                } catch (Exception e) {
+                    log.error("Error rendering page {}: {}", pageNum, e.getMessage(), e);
                 }
             }
         }
