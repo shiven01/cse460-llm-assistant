@@ -5,6 +5,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.cos.COSName;
 import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.rendering.ImageType;
+import org.apache.pdfbox.rendering.PDFRenderer;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDResources;
 import org.apache.pdfbox.pdmodel.graphics.PDXObject;
@@ -55,23 +57,35 @@ public class MultimodalPdfExtractor {
         Map<Integer, List<byte[]>> pageImagesMap = new HashMap<>();
 
         try (PDDocument document = Loader.loadPDF(pdfData)) {
+            PDFRenderer renderer = new PDFRenderer(document);
+
             for (int i = 0; i < document.getNumberOfPages(); i++) {
                 int pageNum = i + 1;
-                PDPage page = document.getPage(i);
-                PDResources resources = page.getResources();
-
                 List<byte[]> pageImages = new ArrayList<>();
 
-                // Extract images from the page
-                for (COSName name : resources.getXObjectNames()) {
-                    PDXObject xObject = resources.getXObject(name);
-                    if (xObject instanceof PDImageXObject image) {
-                        BufferedImage bufferedImage = image.getImage();
-
-                        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                        ImageIO.write(bufferedImage, "PNG", baos);
-                        pageImages.add(baos.toByteArray());
+                // Try to extract embedded images first
+                PDPage page = document.getPage(i);
+                PDResources resources = page.getResources();
+                if (resources != null) {
+                    // Extract embedded images (existing code)
+                    for (COSName name : resources.getXObjectNames()) {
+                        PDXObject xObject = resources.getXObject(name);
+                        if (xObject instanceof PDImageXObject) {
+                            PDImageXObject image = (PDImageXObject)xObject;
+                            BufferedImage bufferedImage = image.getImage();
+                            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                            ImageIO.write(bufferedImage, "PNG", baos);
+                            pageImages.add(baos.toByteArray());
+                        }
                     }
+                }
+
+                // If no embedded images found, render the page
+                if (pageImages.isEmpty()) {
+                    BufferedImage renderedPage = renderer.renderImageWithDPI(i, 150, ImageType.RGB);
+                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                    ImageIO.write(renderedPage, "PNG", baos);
+                    pageImages.add(baos.toByteArray());
                 }
 
                 if (!pageImages.isEmpty()) {
