@@ -7,6 +7,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
@@ -17,7 +18,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -31,20 +31,18 @@ class ImageExtractionTest {
     @Mock
     private DocumentImageRepository imageRepository;
 
-    @Spy
-    private MultimodalPdfExtractor pdfExtractor;
+    @InjectMocks
+    private ImageStorageService imageStorageService;
 
-    @Mock
-    private DocumentImage savedImage;
+    // Using a real extractor since we want to test actual PDF processing
+    @Spy
+    private MultimodalPdfExtractor pdfExtractor = new MultimodalPdfExtractor();
 
     @TempDir
     Path tempDir;
 
-    @InjectMocks
-    private ImageStorageService imageStorageService;
-
     private Document testDocument;
-    private byte[] sampleImage;
+    private byte[] pdfBytes;
 
     @BeforeEach
     void setup() throws IOException {
@@ -52,7 +50,7 @@ class ImageExtractionTest {
         Path imageStorage = tempDir.resolve("images");
         Files.createDirectories(imageStorage);
 
-        // Create a reflection hack to set the imageStorageLocation field
+        // Set the imageStorageLocation field using reflection
         try {
             java.lang.reflect.Field field = ImageStorageService.class.getDeclaredField("imageStorageLocation");
             field.setAccessible(true);
@@ -64,8 +62,8 @@ class ImageExtractionTest {
         // Create a test document
         testDocument = Document.builder()
                 .id(1L)
-                .title("Test Document")
-                .filename("test.pdf")
+                .title("Test Architecture Document")
+                .filename("sample-architecture.pdf")
                 .contentType("application/pdf")
                 .fileSize(1024L)
                 .status("PROCESSED")
@@ -75,8 +73,29 @@ class ImageExtractionTest {
                 .contentHash("abc123")
                 .build();
 
-        // Mock a sample image (1x1 pixel black PNG)
-        sampleImage = new byte[] {
+        // Load the actual PDF file
+        ClassPathResource resource = new ClassPathResource("test-documents/sample-architecture.pdf");
+        pdfBytes = Files.readAllBytes(resource.getFile().toPath());
+
+        // Set up the mock repository to return an ID when saving
+        when(imageRepository.save(any(DocumentImage.class))).thenAnswer(invocation -> {
+            DocumentImage image = invocation.getArgument(0);
+            // Set the ID field using reflection since we don't have a setter
+            try {
+                java.lang.reflect.Field idField = DocumentImage.class.getDeclaredField("id");
+                idField.setAccessible(true);
+                idField.set(image, 1L);
+            } catch (Exception e) {
+                fail("Failed to set ID: " + e.getMessage());
+            }
+            return image;
+        });
+    }
+
+    @Test
+    void testImageStorage() {
+        // Use a simple test image for storage
+        byte[] sampleImage = new byte[] {
                 (byte)0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
                 0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08,
                 0x02, 0x00, 0x00, 0x00, (byte)0x90, 0x77, 0x53, (byte)0xDE, 0x00, 0x00, 0x00, 0x0C,
@@ -85,14 +104,6 @@ class ImageExtractionTest {
                 0x49, 0x45, 0x4E, 0x44, (byte)0xAE, 0x42, 0x60, (byte)0x82
         };
 
-        // Mock the saved image response
-        when(imageRepository.save(any())).thenReturn(savedImage);
-        when(savedImage.getId()).thenReturn(1L);
-        when(savedImage.getImagePath()).thenReturn("test_image.png");
-    }
-
-    @Test
-    void testImageStorage() {
         // Call the service method
         DocumentImage result = imageStorageService.storeImage(testDocument, sampleImage, 1, 0);
 
@@ -102,16 +113,26 @@ class ImageExtractionTest {
 
         // Verify the repository was called
         verify(imageRepository, times(1)).save(any(DocumentImage.class));
+
+        // Verify the file was created in the temp directory
+        assertTrue(Files.exists(tempDir.resolve("images").resolve(result.getImagePath())));
     }
 
     @Test
-    void testImageExtraction() throws IOException {
-        // Mock the PDF extractor to return our sample image
-        Map<Integer, List<byte[]>> mockImages = new HashMap<>();
-        mockImages.put(1, List.of(sampleImage));
-        when(pdfExtractor.extractImages(any())).thenReturn(mockImages);
+    void testRealPdfImageExtraction() throws IOException {
+        // Test with the actual PDF file
+        Map<Integer, List<byte[]>> extractedImages = pdfExtractor.extractImages(pdfBytes);
 
-        // Create a simple implementation for testing
+        // Verify that images were extracted
+        assertNotNull(extractedImages);
+        assertFalse(extractedImages.isEmpty(), "The PDF should contain at least one image");
+
+        // Print some debug information
+        System.out.println("Extracted images from " + extractedImages.size() + " pages");
+        extractedImages.forEach((page, images) ->
+                System.out.println("Page " + page + ": " + images.size() + " images"));
+
+        // Test the full integration by creating our service and calling processImages
         PdfProcessingService pdfService = new PdfProcessingService(
                 null, null, null, pdfExtractor, imageStorageService
         );
@@ -121,11 +142,16 @@ class ImageExtractionTest {
             java.lang.reflect.Method method = PdfProcessingService.class.getDeclaredMethod(
                     "processImages", Document.class, byte[].class);
             method.setAccessible(true);
-            method.invoke(pdfService, testDocument, new byte[0]); // empty PDF data is fine as we're mocking
+            method.invoke(pdfService, testDocument, pdfBytes);
 
-            // Verify the image was stored
-            verify(imageStorageService, times(1)).storeImage(
-                    eq(testDocument), eq(sampleImage), eq(1), eq(0));
+            // Verify images were stored
+            ArgumentCaptor<DocumentImage> imageCaptor = ArgumentCaptor.forClass(DocumentImage.class);
+            verify(imageRepository, atLeastOnce()).save(imageCaptor.capture());
+
+            List<DocumentImage> savedImages = imageCaptor.getAllValues();
+            System.out.println("Saved " + savedImages.size() + " images to the repository");
+            assertFalse(savedImages.isEmpty(), "At least one image should be saved");
+
         } catch (Exception e) {
             fail("Test failed: " + e.getMessage());
         }
