@@ -2,6 +2,7 @@ package com.cse460.llm_assistant.service;
 
 import com.cse460.llm_assistant.model.Document;
 import com.cse460.llm_assistant.model.DocumentContent;
+import com.cse460.llm_assistant.model.DocumentImage;
 import com.cse460.llm_assistant.repository.DocumentContentRepository;
 import com.cse460.llm_assistant.repository.DocumentRepository;
 import lombok.RequiredArgsConstructor;
@@ -158,16 +159,37 @@ public class PdfProcessingService {
                 int pageNum = entry.getKey();
                 List<byte[]> images = entry.getValue();
 
-                log.info("Processing rendered image for page {} of document {}",
-                        pageNum, document.getId());
+                log.info("Processing rendered image for page {} of document {}, found {} images",
+                        pageNum, document.getId(), images.size());
 
                 // Store the rendered page image
                 for (int i = 0; i < images.size(); i++) {
                     byte[] imageData = images.get(i);
 
-                    // Store the image using the existing service
-                    imageStorageService.storeImage(document, imageData, pageNum, i);
-                    log.debug("Stored rendered image for page {} with sequence {}", pageNum, i);
+                    // Validate image data before storing
+                    if (imageData == null || imageData.length < 100) {
+                        log.warn("Skipping invalid image data for page {}, sequence {}: {} bytes",
+                                pageNum, i, (imageData != null) ? imageData.length : 0);
+                        continue;
+                    }
+
+                    log.info("Storing image for page {}, sequence {}, size: {} bytes",
+                            pageNum, i, imageData.length);
+
+                    try {
+                        // Store the image using the existing service
+                        DocumentImage storedImage = imageStorageService.storeImage(document, imageData, pageNum, i);
+
+                        if (storedImage != null) {
+                            log.info("Successfully stored image with ID {} for page {} with sequence {}",
+                                    storedImage.getId(), pageNum, i);
+                        } else {
+                            log.warn("Failed to store image for page {} with sequence {}", pageNum, i);
+                        }
+                    } catch (Exception e) {
+                        log.error("Error storing image for page {} with sequence {}: {}",
+                                pageNum, i, e.getMessage(), e);
+                    }
                 }
             }
 

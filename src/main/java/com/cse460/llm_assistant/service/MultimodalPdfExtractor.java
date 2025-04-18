@@ -68,16 +68,57 @@ public class MultimodalPdfExtractor {
                     // Render the page at 300 DPI for good quality
                     BufferedImage renderedPage = renderer.renderImageWithDPI(i, 300, ImageType.RGB);
 
+                    // Verify that the rendered image has content
+                    if (renderedPage.getWidth() <= 1 || renderedPage.getHeight() <= 1) {
+                        log.warn("Page {} rendered with invalid dimensions: {}x{}",
+                                pageNum, renderedPage.getWidth(), renderedPage.getHeight());
+                        continue;
+                    }
+
                     // Log image dimensions for debugging
-                    log.debug("Rendered page {} with dimensions: {}x{}",
+                    log.info("Rendered page {} with dimensions: {}x{}",
                             pageNum, renderedPage.getWidth(), renderedPage.getHeight());
 
-                    // Convert the rendered image to PNG format
-                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                    ImageIO.write(renderedPage, "PNG", baos);
+                    // Convert the rendered image to PNG format with high quality settings
+                    ByteArrayOutputStream baos = new ByteArrayOutputStream(32768); // Start with larger buffer
+
+                    // Use ImageWriter with optimal compression settings
+                    javax.imageio.ImageWriter writer = ImageIO.getImageWritersByFormatName("png").next();
+                    javax.imageio.ImageWriteParam param = writer.getDefaultWriteParam();
+
+                    // Set up the output
+                    javax.imageio.stream.ImageOutputStream ios = ImageIO.createImageOutputStream(baos);
+                    writer.setOutput(ios);
+
+                    // Write the image
+                    writer.write(null, new javax.imageio.IIOImage(renderedPage, null, null), param);
+
+                    // Cleanup
+                    ios.flush();
+                    writer.dispose();
+                    ios.close();
+
+                    // Get the bytes and verify size
+                    byte[] imageData = baos.toByteArray();
+
+                    // Validate image data
+                    if (imageData.length < 100) {
+                        log.warn("Page {} rendered with suspiciously small size: {} bytes",
+                                pageNum, imageData.length);
+
+                        // Try a simpler approach as fallback
+                        baos = new ByteArrayOutputStream(32768);
+                        ImageIO.write(renderedPage, "PNG", baos);
+                        imageData = baos.toByteArray();
+
+                        log.info("Fallback rendering resulted in {} bytes", imageData.length);
+                    }
+
+                    // Log the size of the image data
+                    log.info("Page {} image size: {} bytes", pageNum, imageData.length);
 
                     // Add the image to the list for this page
-                    pageImages.add(baos.toByteArray());
+                    pageImages.add(imageData);
 
                     // Add the list to the map for this page number
                     pageImagesMap.put(pageNum, pageImages);

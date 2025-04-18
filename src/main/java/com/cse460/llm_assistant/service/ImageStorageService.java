@@ -15,6 +15,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Arrays;
 import java.util.Formatter;
 import java.util.UUID;
 
@@ -31,11 +32,35 @@ public class ImageStorageService {
      */
     public DocumentImage storeImage(Document document, byte[] imageData, int pageNumber, int imageSequence) {
         try {
+            if (imageData == null || imageData.length < 100) {
+                log.error("Invalid image data for document: {}, page: {}, size: {}",
+                        document.getId(), pageNumber, (imageData != null) ? imageData.length : 0);
+                return null;
+            }
+
             // Generate content hash for deduplication
             String contentHash = generateHash(imageData);
+            log.debug("Generated content hash: {}", contentHash);
 
-            // Determine image format (default to PNG if can't detect)
-            String format = detectImageFormat(imageData).orElse("png");
+            // Determine image format - verify if the image data is valid
+            BufferedImage bufferedImage = ImageIO.read(new ByteArrayInputStream(imageData));
+            if (bufferedImage == null) {
+                log.error("Failed to read image data for document: {}, page: {}, data size: {}",
+                        document.getId(), pageNumber, imageData.length);
+
+                // Try to diagnose the image data
+                log.debug("First 20 bytes of image data: {}",
+                        Arrays.toString(Arrays.copyOf(imageData, Math.min(20, imageData.length))));
+                return null;
+            }
+
+            // Log image details
+            log.info("Successfully read image: dimensions {}x{}, type: {}",
+                    bufferedImage.getWidth(), bufferedImage.getHeight(),
+                    bufferedImage.getType());
+
+            // Default to PNG format
+            String format = "png";
 
             // Generate unique filename
             String filename = String.format("%s_p%d_%d_%s.%s",
@@ -48,17 +73,24 @@ public class ImageStorageService {
             // Save to filesystem
             Path targetPath = imageStorageLocation.resolve(filename);
 
-            // Convert byte array to BufferedImage for saving
-            BufferedImage bufferedImage = ImageIO.read(new ByteArrayInputStream(imageData));
-            if (bufferedImage == null) {
-                log.error("Failed to convert image data to BufferedImage for document: {}, page: {}",
-                        document.getId(), pageNumber);
+            // Save image file with high quality settings
+            log.info("Saving image to: {}", targetPath);
+            boolean success = ImageIO.write(bufferedImage, format, targetPath.toFile());
+
+            if (!success) {
+                log.error("Failed to write image to file: no appropriate writer found for format: {}", format);
                 return null;
             }
 
-            // Save image file
-            ImageIO.write(bufferedImage, format, targetPath.toFile());
-            log.info("Saved image to: {}", targetPath);
+            // Verify file was created and has content
+            File savedFile = targetPath.toFile();
+            if (!savedFile.exists() || savedFile.length() < 100) {
+                log.error("File was not created properly: exists={}, size={}",
+                        savedFile.exists(), savedFile.exists() ? savedFile.length() : 0);
+                return null;
+            }
+
+            log.info("Successfully saved image to {} ({} bytes)", targetPath, savedFile.length());
 
             // Create and save database entry
             DocumentImage documentImage = DocumentImage.builder()
