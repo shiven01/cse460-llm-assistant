@@ -142,44 +142,39 @@ public class PdfProcessingService {
     private void processImages(Document document, byte[] pdfData) {
         try {
             // Extract images using the MultimodalPdfExtractor
+            // This will now render each page as an image rather than extracting embedded images
             Map<Integer, List<byte[]>> pageImagesMap = pdfExtractor.extractImages(pdfData);
 
             if (pageImagesMap.isEmpty()) {
-                log.info("No images found in document ID: {}", document.getId());
+                log.info("No images were rendered from document ID: {}", document.getId());
                 return;
             }
 
-            log.info("Found images on {} pages in document ID: {}",
+            log.info("Successfully rendered {} pages as images for document ID: {}",
                     pageImagesMap.size(), document.getId());
 
-            // Process each page's images
+            // Process each page's rendered image
             for (Map.Entry<Integer, List<byte[]>> entry : pageImagesMap.entrySet()) {
                 int pageNum = entry.getKey();
                 List<byte[]> images = entry.getValue();
 
-                log.info("Processing {} images from page {} of document {}",
-                        images.size(), pageNum, document.getId());
+                log.info("Processing rendered image for page {} of document {}",
+                        pageNum, document.getId());
 
-                // Store each image
+                // Store the rendered page image
                 for (int i = 0; i < images.size(); i++) {
                     byte[] imageData = images.get(i);
 
-                    // Skip very small images (likely icons or artifacts)
-                    if (imageData.length < 100) {
-                        log.debug("Skipping small image ({} bytes) on page {}",
-                                imageData.length, pageNum);
-                        continue;
-                    }
-
-                    // Store the image
+                    // Store the image using the existing service
                     imageStorageService.storeImage(document, imageData, pageNum, i);
+                    log.debug("Stored rendered image for page {} with sequence {}", pageNum, i);
                 }
             }
 
-            log.info("Completed image extraction for document ID: {}", document.getId());
+            log.info("Completed page rendering for document ID: {}", document.getId());
         } catch (Exception e) {
             // Don't fail the whole process if image extraction fails
-            log.error("Error extracting images from document ID: {}", document.getId(), e);
+            log.error("Error rendering pages from document ID: {}", document.getId(), e);
         }
     }
 
