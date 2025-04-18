@@ -1,19 +1,28 @@
 package com.cse460.llm_assistant.controller;
 
 import com.cse460.llm_assistant.model.Document;
-import com.cse460.llm_assistant.model.DocumentContent;
+import com.cse460.llm_assistant.model.DocumentImage;
+import com.cse460.llm_assistant.repository.DocumentImageRepository;
 import com.cse460.llm_assistant.repository.DocumentContentRepository;
+import com.cse460.llm_assistant.model.DocumentContent;
 import com.cse460.llm_assistant.service.PdfProcessingService;
+import com.cse460.llm_assistant.service.ImageStorageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.Resource;
 
 import java.io.IOException;
+import java.io.File;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/documents")
@@ -23,6 +32,8 @@ public class DocumentController {
 
     private final PdfProcessingService pdfProcessingService;
     private final DocumentContentRepository contentRepository;
+    private final DocumentImageRepository imageRepository;
+    private final ImageStorageService imageStorageService;
 
     @PostMapping("/upload")
     public ResponseEntity<?> uploadDocument(
@@ -77,5 +88,81 @@ public class DocumentController {
         Map<String, String> response = new HashMap<>();
         response.put("text", fullText.toString());
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Get all images associated with a document
+     */
+    @GetMapping("/{id}/images")
+    public ResponseEntity<?> getDocumentImages(@PathVariable Long id) {
+        log.info("Retrieving images for document with ID: {}", id);
+
+        List<DocumentImage> images = imageRepository.findByDocumentIdOrderByPageNumberAscImageSequenceAsc(id);
+
+        if (images.isEmpty()) {
+            Map<String, String> error = new HashMap<>();
+            error.put("error", "No images found for document with ID: " + id);
+            return ResponseEntity.notFound().build();
+        }
+
+        return ResponseEntity.ok(images);
+    }
+
+    /**
+     * Get all images on a specific page of a document
+     */
+    @GetMapping("/{id}/pages/{pageNumber}/images")
+    public ResponseEntity<?> getPageImages(
+            @PathVariable Long id,
+            @PathVariable Integer pageNumber) {
+
+        log.info("Retrieving images for document with ID: {} page: {}", id, pageNumber);
+
+        List<DocumentImage> images = imageRepository.findByDocumentIdAndPageNumber(id, pageNumber);
+
+        if (images.isEmpty()) {
+            Map<String, String> error = new HashMap<>();
+            error.put("error", "No images found for document with ID: " + id + " on page " + pageNumber);
+            return ResponseEntity.notFound().build();
+        }
+
+        return ResponseEntity.ok(images);
+    }
+
+    /**
+     * Get a specific image file
+     */
+    @GetMapping("/images/{imageId}")
+    public ResponseEntity<Resource> getImage(@PathVariable Long imageId) {
+        log.info("Retrieving image with ID: {}", imageId);
+
+        Optional<DocumentImage> imageOptional = imageRepository.findById(imageId);
+
+        if (imageOptional.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        DocumentImage image = imageOptional.get();
+        File imageFile = imageStorageService.getImageFile(image.getImagePath());
+
+        if (!imageFile.exists()) {
+            log.error("Image file not found: {}", image.getImagePath());
+            return ResponseEntity.notFound().build();
+        }
+
+        // Determine media type based on format
+        String contentType = switch (image.getFormat().toLowerCase()) {
+            case "jpg", "jpeg" -> "image/jpeg";
+            case "png" -> "image/png";
+            case "gif" -> "image/gif";
+            case "tiff" -> "image/tiff";
+            default -> "application/octet-stream";
+        };
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(contentType))
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "inline; filename=\"" + imageFile.getName() + "\"")
+                .body(new FileSystemResource(imageFile));
     }
 }
